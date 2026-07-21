@@ -64,6 +64,7 @@ final class PetModel: ObservableObject {
     private var usageRetryTimer: Timer?
     private var activityRefreshTimer: Timer?
     private var activityRefreshInterval: TimeInterval = 30
+    private var idleSleepingTickCount = 0
     private var clickIndex = 0
     private var hasReceivedUsageThisLaunch = false
     private var isCodexWorking = false
@@ -153,8 +154,8 @@ final class PetModel: ObservableObject {
         let fadeIn = min(progress / 0.12, 1)
         let fadeOut = min((1 - progress) / 0.22, 1)
         return SleepBubblePresentation(
-            verticalOffset: -22 * progress,
-            scale: 0.68 + 0.32 * progress,
+            verticalOffset: -12 * progress,
+            scale: 0.72 + 0.18 * progress,
             opacity: Double(max(0, min(fadeIn, fadeOut)))
         )
     }
@@ -245,37 +246,16 @@ final class PetModel: ObservableObject {
                 idleExhaustedFrames[0], idleExhaustedFrames[0]
             ]
         case .idleSleeping:
-            guard idleSleepingFrames.count == 6 else { return idleSleepingFrames }
-            // Slow breathing stays readable, while the ear/tail accents happen
-            // only after a longer undisturbed sleeping beat.
-            return [
-                idleSleepingFrames[0], idleSleepingFrames[0], idleSleepingFrames[0],
-                idleSleepingFrames[1], idleSleepingFrames[1], idleSleepingFrames[1], idleSleepingFrames[1],
-                idleSleepingFrames[0], idleSleepingFrames[0],
-                idleSleepingFrames[2], idleSleepingFrames[2], idleSleepingFrames[2], idleSleepingFrames[2],
-                idleSleepingFrames[0], idleSleepingFrames[0], idleSleepingFrames[0]
-            ] + Array(repeating: idleSleepingFrames[0], count: 24) + [
-                idleSleepingFrames[3], idleSleepingFrames[3],
-                idleSleepingFrames[0], idleSleepingFrames[0], idleSleepingFrames[0],
-                idleSleepingFrames[4], idleSleepingFrames[4],
-                idleSleepingFrames[0], idleSleepingFrames[0], idleSleepingFrames[0],
-                idleSleepingFrames[5], idleSleepingFrames[5], idleSleepingFrames[5],
-                idleSleepingFrames[0], idleSleepingFrames[0]
-            ]
+            guard idleSleepingFrames.count == 2 else { return idleSleepingFrames }
+            // Timing is handled in advanceAnimation; the playback list itself
+            // contains each retained image exactly once.
+            return idleSleepingFrames
         case .idleGrooming:
             guard idleGroomingFrames.count == 8 else { return idleGroomingFrames }
-            // Rest between grooming passes, then give the lick and two wipes
-            // enough screen time to read at the pet's small display size.
-            return Array(repeating: idleGroomingFrames[7], count: 36) + [
-                idleGroomingFrames[0], idleGroomingFrames[0], idleGroomingFrames[0],
-                idleGroomingFrames[1], idleGroomingFrames[1],
-                idleGroomingFrames[2], idleGroomingFrames[2],
-                idleGroomingFrames[3], idleGroomingFrames[3], idleGroomingFrames[3],
-                idleGroomingFrames[4], idleGroomingFrames[4],
-                idleGroomingFrames[5], idleGroomingFrames[5], idleGroomingFrames[5],
-                idleGroomingFrames[6], idleGroomingFrames[6], idleGroomingFrames[6],
-                idleGroomingFrames[7], idleGroomingFrames[7], idleGroomingFrames[7], idleGroomingFrames[7]
-            ]
+            // Every source pose appears exactly once. Repeating identical
+            // images here made the motion look stalled even though the timer
+            // was running normally.
+            return idleGroomingFrames
         case .clickTail:
             guard clickTailFrames.count == 6 else { return clickTailFrames }
             // A second wag and a short settling beat make the reaction readable.
@@ -364,6 +344,17 @@ final class PetModel: ObservableObject {
     private func advanceAnimation() {
         let frames = framesForCurrentState
         guard !frames.isEmpty else { return }
+
+        if visualState == .idleSleeping {
+            // The shared timer fires every 0.16s. Advancing every sixth tick
+            // gives a stable ~0.96s cadence without duplicating image entries.
+            idleSleepingTickCount += 1
+            guard idleSleepingTickCount >= 6 else { return }
+            idleSleepingTickCount = 0
+            frameIndex = (frameIndex + 1) % frames.count
+            return
+        }
+        idleSleepingTickCount = 0
 
         if visualState == .working {
             if let nextWorkInterruptionDate,

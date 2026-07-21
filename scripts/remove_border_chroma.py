@@ -84,8 +84,8 @@ def main() -> None:
                 # retain the exact RGB values from the generated source.
                 excess = max(0, min(red - green, blue - green))
                 if excess > 8:
-                    red = max(0, red - round(excess * 0.75))
-                    blue = max(0, blue - round(excess * 0.9))
+                    red = max(0, red - excess)
+                    blue = max(0, blue - excess)
                     output_pixels[x, y] = (red, green, blue, alpha_value)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

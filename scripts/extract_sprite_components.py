@@ -54,9 +54,32 @@ def main() -> None:
     strip = Image.open(args.input).convert("RGBA")
     extracted: list[tuple[Image.Image, tuple[int, int, int, int]]] = []
 
+    # Generated contact sheets rarely place the visual gap at the exact
+    # mathematical row boundary. Find the quietest scanline near each expected
+    # split so ears or tails crossing the midpoint are not clipped.
+    strip_alpha = strip.getchannel("A")
+    strip_binary = strip_alpha.point(
+        lambda value: 255 if value > args.alpha_threshold else 0
+    )
+    row_boundaries = [0]
+    for boundary_index in range(1, args.rows):
+        expected = round(boundary_index * strip.height / args.rows)
+        radius = max(8, round(strip.height / args.rows / 4))
+        search_top = max(row_boundaries[-1] + 1, expected - radius)
+        search_bottom = min(strip.height - 1, expected + radius)
+        candidates: list[tuple[int, int, int]] = []
+        for y in range(search_top, search_bottom + 1):
+            occupied = sum(
+                1 for value in strip_binary.crop((0, y, strip.width, y + 1)).getdata()
+                if value
+            )
+            candidates.append((occupied, abs(y - expected), y))
+        row_boundaries.append(min(candidates)[2])
+    row_boundaries.append(strip.height)
+
     for row_index in range(args.rows):
-        row_top = round(row_index * strip.height / args.rows)
-        row_bottom = round((row_index + 1) * strip.height / args.rows)
+        row_top = row_boundaries[row_index]
+        row_bottom = row_boundaries[row_index + 1]
         row = strip.crop((0, row_top, strip.width, row_bottom))
         alpha = row.getchannel("A")
         binary = alpha.point(lambda value: 255 if value > args.alpha_threshold else 0)
@@ -122,8 +145,8 @@ def main() -> None:
                 if 0 < alpha_value < 250:
                     excess = max(0, min(red - green, blue - green))
                     if excess > 6:
-                        red = max(0, red - round(excess * 0.72))
-                        blue = max(0, blue - round(excess * 0.88))
+                        red = max(0, red - excess)
+                        blue = max(0, blue - excess)
                         pixels[x, y] = (red, green, blue, alpha_value)
         frame.save(args.output_dir / f"{index:02d}.png", optimize=True)
 

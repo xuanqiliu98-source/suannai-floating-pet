@@ -57,7 +57,7 @@ struct PetRootView: View {
                     SleepZBubble()
                         .scaleEffect(bubble.scale)
                         .opacity(bubble.opacity)
-                        .offset(x: -33, y: -37 + bubble.verticalOffset)
+                        .offset(x: -33, y: -8 + bubble.verticalOffset)
                 }
             }
             .frame(width: 115, height: 125)
@@ -215,20 +215,20 @@ private struct SleepZBubble: View {
                 )
                 .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 0.8))
                 .shadow(color: Color.blue.opacity(0.22), radius: 2, y: 1)
-                .frame(width: 19, height: 19)
+                .frame(width: 15, height: 15)
 
             RoundedRectangle(cornerRadius: 1.5)
                 .fill(Color(red: 0.72, green: 0.88, blue: 1.0))
-                .frame(width: 5, height: 5)
+                .frame(width: 4, height: 4)
                 .rotationEffect(.degrees(45))
                 .offset(y: 1)
 
             Text("Z")
-                .font(.system(size: 11, weight: .black, design: .rounded))
+                .font(.system(size: 9, weight: .black, design: .rounded))
                 .foregroundStyle(Color(red: 0.08, green: 0.30, blue: 0.62))
-                .offset(y: -4)
+                .offset(y: -3)
         }
-        .frame(width: 21, height: 23)
+        .frame(width: 17, height: 19)
         .accessibilityHidden(true)
     }
 }
