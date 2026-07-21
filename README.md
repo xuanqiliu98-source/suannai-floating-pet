@@ -1,6 +1,23 @@
-# Suannai Floating Pet / 酸奶悬浮宠物
+<p align="center">
+  <img src="Resources/AppIcon.png" width="240" alt="Suannai, a fluffy blue-eyed cat" />
+</p>
+
+<h1 align="center">Suannai Floating Pet / 酸奶悬浮宠物</h1>
+
+<p align="center">
+  <strong>A fluffy little coding companion for Codex.</strong><br />
+  <strong>陪你和 Codex 一起工作的软萌小猫。</strong>
+</p>
 
 [English](#english) · [简体中文](#简体中文)
+
+<p align="center">
+  <img src="Sources/YunduoPet/Resources/Idle/00.png" width="150" alt="Suannai sitting" />
+  &nbsp;&nbsp;
+  <img src="Sources/YunduoPet/Resources/Working/00.png" width="150" alt="Suannai working on a MacBook" />
+  &nbsp;&nbsp;
+  <img src="Sources/YunduoPet/Resources/WorkingPhone/08.png" width="150" alt="Suannai checking an orange iPhone" />
+</p>
 
 ## English
 
