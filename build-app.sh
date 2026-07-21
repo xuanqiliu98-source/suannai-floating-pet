@@ -9,6 +9,12 @@ RESOURCES="$CONTENTS/Resources"
 SDK="/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk"
 MODULE_CACHE="$ROOT/build/module-cache"
 
+# The app bundle is generated output. Recreate it on every build so deleted or
+# renamed sprite frames cannot survive as stale resources in the next bundle.
+if [[ -d "$APP" ]]; then
+  /bin/rm -rf "$APP"
+fi
+
 mkdir -p \
   "$MACOS" \
   "$RESOURCES/Idle" \
@@ -56,4 +62,7 @@ cp "$ROOT"/Sources/YunduoPet/Resources/WorkingCoke/*.png "$RESOURCES/WorkingCoke
 cp "$ROOT"/Sources/YunduoPet/Resources/WaitingForApproval/*.png "$RESOURCES/WaitingForApproval/"
 
 codesign --force --deep --sign - "$APP" >/dev/null
+/usr/bin/touch "$APP"
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+  -f "$APP" >/dev/null 2>&1 || true
 echo "$APP"
