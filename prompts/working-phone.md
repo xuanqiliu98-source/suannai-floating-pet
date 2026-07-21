@@ -1,0 +1,7 @@
+Create exactly 16 sequential frames in a strict 2-row by 8-column sprite sheet for the Codex working state.
+
+Identity and device lock: use the canonical fluffy bicolor ragdoll cat and the approved silver 13-inch Apple MacBook Air from the working animation. The MacBook must keep the same silver aluminum body, black keyboard, centered trackpad, centered Apple logo, size, angle, position, perspective, and baseline in every frame. Use the approved Star Orange iPhone 17 Pro: screen faces the cat while the viewer sees the orange back, centered Apple logo, upper camera plateau, and three rear cameras.
+
+Story, left to right across row one and then row two: 1–2 cat types normally; 3 typing slows; 4 cat glances down to the side; 5 one paw reaches beside the body; 6 orange phone begins to emerge; 7 phone is raised; 8 both paws settle around it; 9 core phone-playing pose; 10 small tap; 11 short swipe; 12 guilty glance toward the MacBook; 13 phone lowers; 14 phone is almost put away; 15 phone is gone and paws return; 16 typing resumes and connects seamlessly to frame 1.
+
+Exactly 16 separated poses, exactly 8 cells per row and 2 rows, consistent cat identity, scale, baseline, camera, laptop, phone, and lighting. Perfectly flat uniform #FF00FF chroma-key background. No checkerboard, scenery, floor, shadows, frame borders, numbers, text, UI, energy bar, extra paws, extra devices, visible phone screen, old dark laptop, or cyan laptop edge.

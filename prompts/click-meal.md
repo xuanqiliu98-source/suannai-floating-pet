@@ -1,0 +1,7 @@
+Create one horizontal six-frame sprite strip for the approved “click: eat a small bowl of food” interaction.
+
+Identity lock: reproduce the exact same fluffy bicolor ragdoll cat from the canonical reference—same rounded head, blue eyes, white blaze and muzzle, warm taupe-gray ears/mask/tail, white chest and paws, compact proportions, realistic soft fur, and slightly proud personality. Use the approved eating concept for the bowl design and natural head-down perspective. Use the layout guide only for six evenly spaced slots; do not copy any guide marks.
+
+Frame story, left to right: 1 neutral seated pose; 2 a small muted-teal food bowl is directly in front of and touching the cat’s paws as the cat notices it; 3 cat lowers head naturally toward the bowl with correct foreshortening; 4 cat eats a bite; 5 cat raises its head and licks its lips; 6 cat sits neatly again, bowl gone. The bowl must stay inside the same pose slot and visually attached to the interaction, never floating.
+
+Production constraints: exactly six complete separated full-body poses in one horizontal strip, consistent scale and baseline, generous padding, no overlap, no cropping. Perfectly flat solid #FF00FF chroma-key background. No energy bar, lightning icon, UI, text, labels, frame borders, scenery, floor, cast/contact shadow, glow, motion lines, detached effects, or any prop besides the small food bowl in frames 2–5.

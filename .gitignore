@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+build/
+tmp/
+qa/
+Generated/
+module-cache/
+yunduo-floating-pet/
+*.xcuserstate
+xcuserdata/
+

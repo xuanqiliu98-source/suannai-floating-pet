@@ -1,0 +1,7 @@
+Create one horizontal six-frame sprite strip for the approved drag interaction while the pet window moves toward screen-right.
+
+Identity lock: reproduce the exact same fluffy bicolor ragdoll cat from the canonical reference—same rounded head, blue eyes, white blaze and muzzle, warm taupe-gray ears/mask/tail, white chest and paws, compact proportions, realistic soft fur, and mildly displeased proud expression. Use the approved lifted-cat concept for anatomy and the broad rounded scruff fold.
+
+Frame story, left to right: 1 seated cat begins to lift; 2 a broad rounded fold of loose skin at the back of the neck rises as if held by an invisible gentle force; 3 body hangs naturally below the scruff, front paws bent inward and hind paws softly curled; 4 fully suspended with a small sway; 5 still suspended while moving screen-right, tail lags toward screen-left from inertia; 6 stable suspended drag pose. The raised scruff must be a short, wide, smooth, rounded skin fold—not a long pointed tuft and not hair being yanked. No visible hand, fingers, hook, string, collar, harness, or tool. Remove all strange bumps or extra anatomy around the hind paws.
+
+Production constraints: exactly six complete separated full-body poses in one horizontal strip, consistent scale, generous padding, no overlap, no cropping. Perfectly flat solid #FF00FF chroma-key background. No energy bar, lightning icon, UI, text, labels, frame borders, scenery, floor, cast/contact shadow, glow, motion lines, detached effects, or extra props.
