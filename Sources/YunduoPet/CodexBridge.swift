@@ -409,12 +409,25 @@ final class CodexBridge: @unchecked Sendable {
 
         if itemType == "custom_tool_call",
            let input = payload["input"] as? String,
-           input.contains("sandbox_permissions"),
-           input.contains("require_escalated") {
+           Self.toolInputMayRequestApproval(input) {
             cursor.pendingApprovalCallIDs.insert(callID)
         } else if itemType == "custom_tool_call_output" {
             cursor.pendingApprovalCallIDs.remove(callID)
         }
+    }
+
+    private static func toolInputMayRequestApproval(_ input: String) -> Bool {
+        let requestsSandboxEscalation = input.contains("sandbox_permissions")
+            && input.contains("require_escalated")
+
+        // Browser downloads use the in-app browser's own approval surface and
+        // do not carry sandbox_permissions. The tool call remains open while
+        // Codex displays "Browser use / Allow download", so track these calls
+        // until their matching custom_tool_call_output arrives.
+        let requestsBrowserDownload = input.contains("downloadMedia")
+            || (input.contains("waitForEvent") && input.contains("download"))
+
+        return requestsSandboxEscalation || requestsBrowserDownload
     }
 
     private func updateUsage(from snapshot: [String: Any]) {
