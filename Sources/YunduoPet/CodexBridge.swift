@@ -21,6 +21,9 @@ final class CodexBridge: @unchecked Sendable {
     private var lastReportedApproval: Bool?
     private var logCursors: [String: LogCursor] = [:]
     private var pendingApprovalFirstSeen: [String: Date] = [:]
+    private var connectionGeneration = 0
+    private var usageRequestGeneration = 0
+    private var hasInitialized = false
 
     init(
         onWeeklyRemaining: @escaping UsageHandler,
@@ -42,6 +45,9 @@ final class CodexBridge: @unchecked Sendable {
 
     func stop() {
         ioQueue.async { [weak self] in
+            self?.connectionGeneration += 1
+            self?.usageRequestGeneration += 1
+            self?.hasInitialized = false
             self?.process?.terminate()
             self?.process = nil
             self?.inputHandle = nil
@@ -50,7 +56,7 @@ final class CodexBridge: @unchecked Sendable {
 
     func refreshUsage() {
         ioQueue.async { [weak self] in
-            self?.send(method: "account/rateLimits/read", id: 2, params: NSNull())
+            self?.requestUsage()
         }
     }
 
@@ -71,10 +77,16 @@ final class CodexBridge: @unchecked Sendable {
     }
 
     private func launch() {
-        guard process == nil else {
-            refreshUsage()
+        if let process, process.isRunning {
+            requestUsage()
             return
         }
+
+        process = nil
+        inputHandle = nil
+        hasInitialized = false
+        connectionGeneration += 1
+        let generation = connectionGeneration
 
         let codexPath = "/Applications/ChatGPT.app/Contents/Resources/codex"
         guard FileManager.default.isExecutableFile(atPath: codexPath) else {
@@ -93,8 +105,17 @@ final class CodexBridge: @unchecked Sendable {
         process.standardOutput = output
         process.standardError = error
         process.terminationHandler = { [weak self] task in
-            guard task.terminationStatus != 0 else { return }
-            self?.onStatus("Codex 连接已断开")
+            self?.ioQueue.async {
+                guard let self, self.process === task else { return }
+                self.process = nil
+                self.inputHandle = nil
+                self.hasInitialized = false
+                self.connectionGeneration += 1
+                self.usageRequestGeneration += 1
+                if task.terminationStatus != 0 {
+                    self.onStatus("Codex 连接已断开")
+                }
+            }
         }
 
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
@@ -122,6 +143,13 @@ final class CodexBridge: @unchecked Sendable {
                     "capabilities": NSNull()
                 ]
             )
+            ioQueue.asyncAfter(deadline: .now() + 5) { [weak self] in
+                guard let self,
+                      generation == self.connectionGeneration,
+                      !self.hasInitialized
+                else { return }
+                self.restartBridge(status: "Codex 连接超时，正在重连…")
+            }
         } catch {
             onStatus("无法启动 Codex 接口")
         }
@@ -151,8 +179,9 @@ final class CodexBridge: @unchecked Sendable {
         }
 
         if (message["id"] as? Int) == 1 {
+            hasInitialized = true
             sendNotification(method: "initialized")
-            send(method: "account/rateLimits/read", id: 2, params: NSNull())
+            requestUsage()
             refreshActivity()
             onStatus("已连接 Codex")
             return
@@ -161,6 +190,7 @@ final class CodexBridge: @unchecked Sendable {
         if (message["id"] as? Int) == 2,
            let result = message["result"] as? [String: Any],
            let snapshot = result["rateLimits"] as? [String: Any] {
+            usageRequestGeneration += 1
             updateUsage(from: snapshot)
             return
         }
@@ -168,6 +198,7 @@ final class CodexBridge: @unchecked Sendable {
         if message["method"] as? String == "account/rateLimits/updated",
            let params = message["params"] as? [String: Any],
            let snapshot = params["rateLimits"] as? [String: Any] {
+            usageRequestGeneration += 1
             updateUsage(from: snapshot)
             return
         }
@@ -407,11 +438,21 @@ final class CodexBridge: @unchecked Sendable {
               let callID = payload["call_id"] as? String
         else { return }
 
-        if itemType == "custom_tool_call",
-           let input = payload["input"] as? String,
-           Self.toolInputMayRequestApproval(input) {
+        let toolInput: String?
+        switch itemType {
+        case "custom_tool_call":
+            toolInput = payload["input"] as? String
+        case "function_call":
+            toolInput = payload["arguments"] as? String
+        default:
+            toolInput = nil
+        }
+
+        if let toolInput,
+           Self.toolInputMayRequestApproval(toolInput) {
             cursor.pendingApprovalCallIDs.insert(callID)
-        } else if itemType == "custom_tool_call_output" {
+        } else if itemType == "custom_tool_call_output"
+                    || itemType == "function_call_output" {
             cursor.pendingApprovalCallIDs.remove(callID)
         }
     }
@@ -420,14 +461,20 @@ final class CodexBridge: @unchecked Sendable {
         let requestsSandboxEscalation = input.contains("sandbox_permissions")
             && input.contains("require_escalated")
 
-        // Browser downloads use the in-app browser's own approval surface and
-        // do not carry sandbox_permissions. The tool call remains open while
-        // Codex displays "Browser use / Allow download", so track these calls
-        // until their matching custom_tool_call_output arrives.
+        // Browser file transfers use the in-app browser's own approval surface
+        // and do not carry sandbox_permissions. The tool call remains open
+        // while Codex displays the upload/download prompt, so track it until
+        // the matching tool output arrives.
         let requestsBrowserDownload = input.contains("downloadMedia")
             || (input.contains("waitForEvent") && input.contains("download"))
 
-        return requestsSandboxEscalation || requestsBrowserDownload
+        let requestsBrowserUpload = input.contains("uploadMedia")
+            || (input.contains("filechooser")
+                && (input.contains("setFiles") || input.contains("setInputFiles")))
+
+        return requestsSandboxEscalation
+            || requestsBrowserDownload
+            || requestsBrowserUpload
     }
 
     private func updateUsage(from snapshot: [String: Any]) {
@@ -444,6 +491,36 @@ final class CodexBridge: @unchecked Sendable {
             return
         }
         onStatus("未找到 7 天用量窗口")
+    }
+
+    private func requestUsage() {
+        guard let process, process.isRunning, hasInitialized else {
+            restartBridge(status: "正在重新连接 Codex…")
+            return
+        }
+
+        usageRequestGeneration += 1
+        let generation = usageRequestGeneration
+        send(method: "account/rateLimits/read", id: 2, params: NSNull())
+        ioQueue.asyncAfter(deadline: .now() + 5) { [weak self] in
+            guard let self, generation == self.usageRequestGeneration else { return }
+            self.restartBridge(status: "用量刷新超时，正在重连…")
+        }
+    }
+
+    private func restartBridge(status: String) {
+        onStatus(status)
+        connectionGeneration += 1
+        usageRequestGeneration += 1
+        hasInitialized = false
+        let oldProcess = process
+        process = nil
+        inputHandle = nil
+        outputBuffer.removeAll(keepingCapacity: false)
+        if oldProcess?.isRunning == true {
+            oldProcess?.terminate()
+        }
+        launch()
     }
 
     private func send(method: String, id: Int, params: Any) {
