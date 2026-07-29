@@ -107,9 +107,6 @@ final class PetModel: ObservableObject {
         workingPhoneFrames = Self.loadFrames(in: "WorkingPhone")
         workingCokeFrames = Self.loadFrames(in: "WorkingCoke")
         waitingForApprovalFrames = Self.loadFrames(in: "WaitingForApproval")
-        if let cached = UserDefaults.standard.object(forKey: "weeklyRemaining") as? NSNumber {
-            weeklyRemaining = min(max(cached.doubleValue, 0), 1)
-        }
         if let savedScale = UserDefaults.standard.object(forKey: "petScale") as? NSNumber {
             petScale = Self.clampedPetScale(CGFloat(savedScale.doubleValue))
         }
@@ -455,7 +452,6 @@ final class PetModel: ObservableObject {
     private func setWeeklyRemaining(_ value: Double) {
         weeklyRemaining = value
         hasReceivedUsageThisLaunch = true
-        UserDefaults.standard.set(value, forKey: "weeklyRemaining")
         usageRetryTimer?.invalidate()
         usageRetryTimer = nil
         bridgeMessage = "周剩余用量 \(Int((value * 100).rounded()))%"

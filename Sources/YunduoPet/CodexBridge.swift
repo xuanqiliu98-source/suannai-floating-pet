@@ -25,6 +25,9 @@ final class CodexBridge: @unchecked Sendable {
     private var usageRequestGeneration = 0
     private var hasInitialized = false
 
+    private static let initializationTimeout: TimeInterval = 8
+    private static let usageResponseTimeout: TimeInterval = 20
+
     init(
         onWeeklyRemaining: @escaping UsageHandler,
         onStatus: @escaping StatusHandler,
@@ -143,7 +146,7 @@ final class CodexBridge: @unchecked Sendable {
                     "capabilities": NSNull()
                 ]
             )
-            ioQueue.asyncAfter(deadline: .now() + 5) { [weak self] in
+            ioQueue.asyncAfter(deadline: .now() + Self.initializationTimeout) { [weak self] in
                 guard let self,
                       generation == self.connectionGeneration,
                       !self.hasInitialized
@@ -188,18 +191,30 @@ final class CodexBridge: @unchecked Sendable {
         }
 
         if (message["id"] as? Int) == 2,
-           let result = message["result"] as? [String: Any],
-           let snapshot = result["rateLimits"] as? [String: Any] {
-            usageRequestGeneration += 1
-            updateUsage(from: snapshot)
+           let result = message["result"] as? [String: Any] {
+            let snapshotsByLimitID = result["rateLimitsByLimitId"] as? [String: Any]
+            let codexSnapshot = snapshotsByLimitID?["codex"] as? [String: Any]
+            let legacySnapshot = result["rateLimits"] as? [String: Any]
+
+            if let snapshot = codexSnapshot ?? legacySnapshot,
+               updateUsage(from: snapshot) {
+                usageRequestGeneration += 1
+            } else {
+                onStatus("未找到 Codex 7 天用量窗口")
+            }
             return
         }
 
         if message["method"] as? String == "account/rateLimits/updated",
            let params = message["params"] as? [String: Any],
            let snapshot = params["rateLimits"] as? [String: Any] {
-            usageRequestGeneration += 1
-            updateUsage(from: snapshot)
+            // A single account can expose multiple seven-day buckets. For
+            // example, `codex_bengalfox` is the Spark-model allowance and can
+            // be at 100% while the overall `codex` allowance is at 96%.
+            // Only the overall Codex bucket is allowed to drive the pet.
+            if updateUsage(from: snapshot) {
+                usageRequestGeneration += 1
+            }
             return
         }
 
@@ -477,7 +492,13 @@ final class CodexBridge: @unchecked Sendable {
             || requestsBrowserUpload
     }
 
-    private func updateUsage(from snapshot: [String: Any]) {
+    @discardableResult
+    private func updateUsage(from snapshot: [String: Any]) -> Bool {
+        if let limitID = snapshot["limitId"] as? String,
+           limitID != "codex" {
+            return false
+        }
+
         let candidates = [snapshot["primary"], snapshot["secondary"]]
         for candidate in candidates {
             guard let window = candidate as? [String: Any],
@@ -488,9 +509,9 @@ final class CodexBridge: @unchecked Sendable {
 
             let remaining = min(max(1 - used.doubleValue / 100, 0), 1)
             onWeeklyRemaining(remaining)
-            return
+            return true
         }
-        onStatus("未找到 7 天用量窗口")
+        return false
     }
 
     private func requestUsage() {
@@ -502,7 +523,7 @@ final class CodexBridge: @unchecked Sendable {
         usageRequestGeneration += 1
         let generation = usageRequestGeneration
         send(method: "account/rateLimits/read", id: 2, params: NSNull())
-        ioQueue.asyncAfter(deadline: .now() + 5) { [weak self] in
+        ioQueue.asyncAfter(deadline: .now() + Self.usageResponseTimeout) { [weak self] in
             guard let self, generation == self.usageRequestGeneration else { return }
             self.restartBridge(status: "用量刷新超时，正在重连…")
         }
