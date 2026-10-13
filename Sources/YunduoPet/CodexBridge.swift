@@ -28,6 +28,26 @@ final class CodexBridge: @unchecked Sendable {
     private static let initializationTimeout: TimeInterval = 8
     private static let usageResponseTimeout: TimeInterval = 20
 
+    private static var codexExecutableURL: URL? {
+        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
+        let candidates = [
+            // Current ChatGPT desktop releases.
+            "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+            "\(homeDirectory)/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+            // Older ChatGPT desktop releases.
+            "/Applications/ChatGPT.app/Contents/Resources/codex",
+            "\(homeDirectory)/Applications/ChatGPT.app/Contents/Resources/codex",
+            // Common standalone CLI installation locations. GUI apps do not
+            // inherit the user's interactive shell PATH, so check explicitly.
+            "\(homeDirectory)/.local/bin/codex",
+            "/opt/homebrew/bin/codex",
+            "/usr/local/bin/codex"
+        ]
+
+        return candidates.first(where: FileManager.default.isExecutableFile(atPath:))
+            .map(URL.init(fileURLWithPath:))
+    }
+
     init(
         onWeeklyRemaining: @escaping UsageHandler,
         onStatus: @escaping StatusHandler,
@@ -91,8 +111,7 @@ final class CodexBridge: @unchecked Sendable {
         connectionGeneration += 1
         let generation = connectionGeneration
 
-        let codexPath = "/Applications/ChatGPT.app/Contents/Resources/codex"
-        guard FileManager.default.isExecutableFile(atPath: codexPath) else {
+        guard let codexExecutableURL = Self.codexExecutableURL else {
             onStatus("未找到 Codex 本地接口")
             return
         }
@@ -102,7 +121,7 @@ final class CodexBridge: @unchecked Sendable {
         let output = Pipe()
         let error = Pipe()
 
-        process.executableURL = URL(fileURLWithPath: codexPath)
+        process.executableURL = codexExecutableURL
         process.arguments = ["app-server", "--stdio"]
         process.standardInput = input
         process.standardOutput = output
