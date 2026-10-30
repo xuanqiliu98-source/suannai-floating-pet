@@ -24,6 +24,7 @@ enum PetVisualState: String {
 struct CompletionNotice: Identifiable, Equatable {
     let id = UUID()
     let taskName: String
+    let fishReward: Int
 }
 
 struct SleepBubblePresentation {
@@ -39,12 +40,26 @@ final class PetModel: ObservableObject {
     @Published private(set) var bridgeMessage = "正在连接 Codex…"
     @Published private(set) var completionNotice: CompletionNotice?
     @Published private(set) var petScale: CGFloat = 1
+    @Published private(set) var showsEnergyBar = true
+    @Published private(set) var fishBalance = 0
+    @Published private(set) var ownedShopItemIDs = Set<String>()
+    @Published private(set) var equippedBedID: String?
+    @Published private(set) var fishRewardNotice: FishRewardNotice?
+    @Published private(set) var shopMessage: String?
     @Published var visualState: PetVisualState = .idle
 
     static let minimumPetScale: CGFloat = 0.75
     static let maximumPetScale: CGFloat = 1.50
 
     let idleFrames: [NSImage]
+    let idleSoftCushionFrames: [NSImage]
+    let idleSoftCushionGroomingFrames: [NSImage]
+    let idleSoftCushionSleepingFrames: [NSImage]
+    let idleSoftCushionExhaustedFrames: [NSImage]
+    let idleCardboardBoxFrames: [NSImage]
+    let idleCardboardBoxGroomingFrames: [NSImage]
+    let idleCardboardBoxSleepingFrames: [NSImage]
+    let idleCardboardBoxExhaustedFrames: [NSImage]
     let idleGroomingFrames: [NSImage]
     let idleSleepingFrames: [NSImage]
     let idleExhaustedFrames: [NSImage]
@@ -72,6 +87,16 @@ final class PetModel: ObservableObject {
     private var nextWorkInterruptionDate: Date?
     private var nextWorkInterruption: PetVisualState?
     private var lastWorkInterruption: PetVisualState?
+    private var fishRewardDismissGeneration = 0
+
+    private enum EconomyDefaultsKey {
+        static let fishBalance = "fishBalance"
+        static let ownedShopItemIDs = "ownedShopItemIDs"
+        static let equippedBedID = "equippedBedID"
+        static let lastTouchRewardAt = "lastTouchFishRewardAt"
+        static let touchRewardDay = "touchFishRewardDay"
+        static let touchRewardCount = "touchFishRewardCount"
+    }
     private lazy var bridge = CodexBridge(
         onWeeklyRemaining: { [weak self] value in
             Task { @MainActor in
@@ -94,6 +119,14 @@ final class PetModel: ObservableObject {
 
     init() {
         idleFrames = Self.loadFrames(in: "Idle")
+        idleSoftCushionFrames = Self.loadFrames(in: "IdleSoftCushion")
+        idleSoftCushionGroomingFrames = Self.loadFrames(in: "IdleSoftCushionGrooming")
+        idleSoftCushionSleepingFrames = Self.loadFrames(in: "IdleSoftCushionSleeping")
+        idleSoftCushionExhaustedFrames = Self.loadFrames(in: "IdleSoftCushionExhausted")
+        idleCardboardBoxFrames = Self.loadFrames(in: "IdleCardboardBox")
+        idleCardboardBoxGroomingFrames = Self.loadFrames(in: "IdleCardboardBoxGrooming")
+        idleCardboardBoxSleepingFrames = Self.loadFrames(in: "IdleCardboardBoxSleeping")
+        idleCardboardBoxExhaustedFrames = Self.loadFrames(in: "IdleCardboardBoxExhausted")
         idleGroomingFrames = Self.loadFrames(in: "IdleGrooming")
         idleSleepingFrames = Self.loadFrames(in: "IdleSleeping")
         idleExhaustedFrames = Self.loadFrames(in: "IdleExhausted")
@@ -110,13 +143,30 @@ final class PetModel: ObservableObject {
         if let savedScale = UserDefaults.standard.object(forKey: "petScale") as? NSNumber {
             petScale = Self.clampedPetScale(CGFloat(savedScale.doubleValue))
         }
+        if UserDefaults.standard.object(forKey: "showsEnergyBar") != nil {
+            showsEnergyBar = UserDefaults.standard.bool(forKey: "showsEnergyBar")
+        }
+        fishBalance = max(0, UserDefaults.standard.integer(forKey: EconomyDefaultsKey.fishBalance))
+        ownedShopItemIDs = Set(
+            UserDefaults.standard.stringArray(forKey: EconomyDefaultsKey.ownedShopItemIDs) ?? []
+        )
+        if let savedBedID = UserDefaults.standard.string(forKey: EconomyDefaultsKey.equippedBedID),
+           ownedShopItemIDs.contains(savedBedID) {
+            equippedBedID = savedBedID
+        }
         visualState = enteringFrames.isEmpty ? .idle : .entering
 
-        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.16, repeats: true) { [weak self] _ in
+        let animationTimer = Timer(timeInterval: 0.16, repeats: true) { [weak self] _ in
+            let isEventTracking = RunLoop.current.currentMode == .eventTracking
             Task { @MainActor in
-                self?.advanceAnimation()
+                self?.advanceAnimation(isEventTracking: isEventTracking)
             }
         }
+        self.animationTimer = animationTimer
+        // Mouse dragging switches AppKit into event-tracking run-loop mode.
+        // A default-mode scheduled timer pauses there and leaves the drag
+        // sprite frozen on frame zero, so animation must run in common modes.
+        RunLoop.main.add(animationTimer, forMode: .common)
         bridge.start()
         usageRefreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.bridge.refreshUsage() }
@@ -141,6 +191,33 @@ final class PetModel: ObservableObject {
         return frames[min(frameIndex, frames.count - 1)]
     }
 
+    var usesIntegratedBedAnimation: Bool {
+        !(integratedBedFramesForCurrentState?.isEmpty ?? true)
+    }
+
+    private var integratedBedFramesForCurrentState: [NSImage]? {
+        switch equippedBedID {
+        case "soft-cushion":
+            switch visualState {
+            case .idle: return idleSoftCushionFrames
+            case .idleGrooming: return idleSoftCushionGroomingFrames
+            case .idleSleeping: return idleSoftCushionSleepingFrames
+            case .idleExhausted: return idleSoftCushionExhaustedFrames
+            default: return nil
+            }
+        case "cardboard-box":
+            switch visualState {
+            case .idle: return idleCardboardBoxFrames
+            case .idleGrooming: return idleCardboardBoxGroomingFrames
+            case .idleSleeping: return idleCardboardBoxSleepingFrames
+            case .idleExhausted: return idleCardboardBoxExhaustedFrames
+            default: return nil
+            }
+        default:
+            return nil
+        }
+    }
+
     var sleepBubblePresentation: SleepBubblePresentation? {
         guard visualState == .idleExhausted else { return nil }
         let startFrame = 6
@@ -162,6 +239,70 @@ final class PetModel: ObservableObject {
         visualState = reactions[clickIndex % reactions.count]
         clickIndex += 1
         frameIndex = 0
+        tryAwardTouchFish()
+    }
+
+    func ownsShopItem(_ item: PetShopItem) -> Bool {
+        item.kind != .consumable && ownedShopItemIDs.contains(item.id)
+    }
+
+    func purchase(_ item: PetShopItem) {
+        shopMessage = nil
+
+        if ownsShopItem(item) {
+            shopMessage = "已经拥有「\(item.name)」啦"
+            return
+        }
+        guard fishBalance >= item.price else {
+            shopMessage = "还差 \(item.price - fishBalance) 条小鱼干"
+            return
+        }
+
+        fishBalance -= item.price
+        if item.kind != .consumable {
+            ownedShopItemIDs.insert(item.id)
+            UserDefaults.standard.set(
+                Array(ownedShopItemIDs).sorted(),
+                forKey: EconomyDefaultsKey.ownedShopItemIDs
+            )
+        }
+        persistFishBalance()
+
+        switch item.kind {
+        case .consumable:
+            shopMessage = "酸奶开心地吃掉了「\(item.name)」"
+            playShopReaction(.clickMeal)
+        case .toy:
+            shopMessage = "「\(item.name)」已放进仓库"
+            playShopReaction(item.id == "yarn-ball" ? .clickTail : .clickTurn)
+        case .bed:
+            equipBed(item)
+            shopMessage = "「\(item.name)」已购买并使用"
+        }
+    }
+
+    func useOwnedItem(_ item: PetShopItem) {
+        guard ownsShopItem(item) else { return }
+        shopMessage = nil
+        switch item.kind {
+        case .toy:
+            shopMessage = "酸奶正在玩「\(item.name)」"
+            playShopReaction(item.id == "yarn-ball" ? .clickTail : .clickTurn)
+        case .bed:
+            if equippedBedID == item.id {
+                unequipBed()
+                shopMessage = "已把「\(item.name)」收回仓库"
+            } else {
+                equipBed(item)
+                shopMessage = "已换上「\(item.name)」"
+            }
+        case .consumable:
+            break
+        }
+    }
+
+    func clearShopMessage() {
+        shopMessage = nil
     }
 
     func refreshUsage() {
@@ -175,6 +316,12 @@ final class PetModel: ObservableObject {
         UserDefaults.standard.set(Double(clamped), forKey: "petScale")
     }
 
+    func setEnergyBarVisible(_ isVisible: Bool) {
+        guard showsEnergyBar != isVisible else { return }
+        showsEnergyBar = isVisible
+        UserDefaults.standard.set(isVisible, forKey: "showsEnergyBar")
+    }
+
     func dismissCompletionNotice() {
         completionNotice = nil
     }
@@ -183,7 +330,10 @@ final class PetModel: ObservableObject {
         let nextState: PetVisualState = translation >= 0 ? .draggingRight : .draggingLeft
         if visualState != nextState {
             visualState = nextState
-            frameIndex = 0
+            // Frame zero is another grounded sitting pose and looked like a
+            // frozen replacement image. Begin with the paw-lift frame, then
+            // let the common-mode timer advance through the airborne loop.
+            frameIndex = 1
         }
     }
 
@@ -218,6 +368,11 @@ final class PetModel: ObservableObject {
     }
 
     private var framesForCurrentState: [NSImage] {
+        if let integratedFrames = integratedBedFramesForCurrentState,
+           !integratedFrames.isEmpty {
+            return integratedFrames
+        }
+
         switch visualState {
         case .idleExhausted:
             guard idleExhaustedFrames.count == 6 else { return idleExhaustedFrames }
@@ -338,15 +493,35 @@ final class PetModel: ObservableObject {
         }
     }
 
-    private func advanceAnimation() {
+    private func advanceAnimation(isEventTracking: Bool) {
+        // Both a window drag and an open NSMenu use AppKit's event-tracking
+        // run-loop mode. Keep animating during an actual pet drag, but pause
+        // all published frame updates while a context menu is tracking. A
+        // frame update there rebuilds SwiftUI's nested Menu and dismisses its
+        // submenu as soon as the mouse button is released.
+        if isEventTracking &&
+            visualState != .draggingLeft && visualState != .draggingRight {
+            return
+        }
+
         let frames = framesForCurrentState
         guard !frames.isEmpty else { return }
 
-        if visualState == .idleSleeping {
+        if visualState == .idleSleeping ||
+            (usesIntegratedBedAnimation && visualState != .idleGrooming) {
             // The shared timer fires every 0.16s. Advancing every sixth tick
-            // gives a stable ~0.96s cadence without duplicating image entries.
+            // gives a stable ~0.96s cadence without duplicating source frames.
             idleSleepingTickCount += 1
             guard idleSleepingTickCount >= 6 else { return }
+            idleSleepingTickCount = 0
+            frameIndex = (frameIndex + 1) % frames.count
+            return
+        }
+        if usesIntegratedBedAnimation && visualState == .idleGrooming {
+            // Grooming needs to read as one continuous gesture rather than a
+            // sequence of held poses. Three ticks gives a ~0.48s cadence.
+            idleSleepingTickCount += 1
+            guard idleSleepingTickCount >= 3 else { return }
             idleSleepingTickCount = 0
             frameIndex = (frameIndex + 1) % frames.count
             return
@@ -446,7 +621,73 @@ final class PetModel: ObservableObject {
     }
 
     private func showCompletion(taskName: String) {
-        completionNotice = CompletionNotice(taskName: taskName)
+        awardFish(1, reason: "完成任务")
+        completionNotice = CompletionNotice(taskName: taskName, fishReward: 1)
+    }
+
+    private func awardFish(_ amount: Int, reason: String) {
+        guard amount > 0 else { return }
+        fishBalance += amount
+        persistFishBalance()
+        fishRewardDismissGeneration += 1
+        let generation = fishRewardDismissGeneration
+        fishRewardNotice = FishRewardNotice(amount: amount, reason: reason)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { [weak self] in
+            guard let self, generation == self.fishRewardDismissGeneration else { return }
+            self.fishRewardNotice = nil
+        }
+    }
+
+    private func tryAwardTouchFish() {
+        let defaults = UserDefaults.standard
+        let now = Date()
+        let dayKey = Self.localDayKey(for: now)
+        var rewardsToday = defaults.integer(forKey: EconomyDefaultsKey.touchRewardCount)
+        if defaults.string(forKey: EconomyDefaultsKey.touchRewardDay) != dayKey {
+            rewardsToday = 0
+            defaults.set(dayKey, forKey: EconomyDefaultsKey.touchRewardDay)
+            defaults.set(0, forKey: EconomyDefaultsKey.touchRewardCount)
+        }
+
+        guard rewardsToday < 5 else { return }
+        let lastRewardAt = defaults.double(forKey: EconomyDefaultsKey.lastTouchRewardAt)
+        guard lastRewardAt == 0 || now.timeIntervalSince1970 - lastRewardAt >= 10 * 60 else { return }
+        guard Int.random(in: 1...100) <= 15 else { return }
+
+        let amount = Int.random(in: 1...3)
+        defaults.set(now.timeIntervalSince1970, forKey: EconomyDefaultsKey.lastTouchRewardAt)
+        defaults.set(rewardsToday + 1, forKey: EconomyDefaultsKey.touchRewardCount)
+        awardFish(amount, reason: "摸摸酸奶")
+    }
+
+    private func playShopReaction(_ state: PetVisualState) {
+        guard !isCodexWorking, !isWaitingForApproval else { return }
+        visualState = state
+        frameIndex = 0
+    }
+
+    private func equipBed(_ item: PetShopItem) {
+        guard item.kind == .bed else { return }
+        equippedBedID = item.id
+        frameIndex = 0
+        idleSleepingTickCount = 0
+        UserDefaults.standard.set(item.id, forKey: EconomyDefaultsKey.equippedBedID)
+    }
+
+    private func unequipBed() {
+        equippedBedID = nil
+        frameIndex = 0
+        idleSleepingTickCount = 0
+        UserDefaults.standard.removeObject(forKey: EconomyDefaultsKey.equippedBedID)
+    }
+
+    private func persistFishBalance() {
+        UserDefaults.standard.set(fishBalance, forKey: EconomyDefaultsKey.fishBalance)
+    }
+
+    private static func localDayKey(for date: Date) -> String {
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return "\(components.year ?? 0)-\(components.month ?? 0)-\(components.day ?? 0)"
     }
 
     private func setWeeklyRemaining(_ value: Double) {

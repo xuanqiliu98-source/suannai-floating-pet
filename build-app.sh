@@ -18,6 +18,14 @@ fi
 mkdir -p \
   "$MACOS" \
   "$RESOURCES/Idle" \
+  "$RESOURCES/IdleSoftCushion" \
+  "$RESOURCES/IdleSoftCushionGrooming" \
+  "$RESOURCES/IdleSoftCushionSleeping" \
+  "$RESOURCES/IdleSoftCushionExhausted" \
+  "$RESOURCES/IdleCardboardBox" \
+  "$RESOURCES/IdleCardboardBoxGrooming" \
+  "$RESOURCES/IdleCardboardBoxSleeping" \
+  "$RESOURCES/IdleCardboardBoxExhausted" \
   "$RESOURCES/IdleGrooming" \
   "$RESOURCES/IdleSleeping" \
   "$RESOURCES/IdleExhausted" \
@@ -31,6 +39,7 @@ mkdir -p \
   "$RESOURCES/WorkingPhone" \
   "$RESOURCES/WorkingCoke" \
   "$RESOURCES/WaitingForApproval" \
+  "$RESOURCES/ShopItems" \
   "$MODULE_CACHE"
 
 /usr/bin/swiftc \
@@ -47,6 +56,14 @@ mkdir -p \
 cp "$ROOT/Resources/Info.plist" "$CONTENTS/Info.plist"
 cp "$ROOT/Resources/AppIcon.icns" "$RESOURCES/AppIcon.icns"
 cp "$ROOT"/Sources/YunduoPet/Resources/Idle/*.png "$RESOURCES/Idle/"
+cp "$ROOT"/Sources/YunduoPet/Resources/IdleSoftCushion/*.png "$RESOURCES/IdleSoftCushion/"
+cp "$ROOT"/Sources/YunduoPet/Resources/IdleSoftCushionGrooming/*.png "$RESOURCES/IdleSoftCushionGrooming/"
+cp "$ROOT"/Sources/YunduoPet/Resources/IdleSoftCushionSleeping/*.png "$RESOURCES/IdleSoftCushionSleeping/"
+cp "$ROOT"/Sources/YunduoPet/Resources/IdleSoftCushionExhausted/*.png "$RESOURCES/IdleSoftCushionExhausted/"
+cp "$ROOT"/Sources/YunduoPet/Resources/IdleCardboardBox/*.png "$RESOURCES/IdleCardboardBox/"
+cp "$ROOT"/Sources/YunduoPet/Resources/IdleCardboardBoxGrooming/*.png "$RESOURCES/IdleCardboardBoxGrooming/"
+cp "$ROOT"/Sources/YunduoPet/Resources/IdleCardboardBoxSleeping/*.png "$RESOURCES/IdleCardboardBoxSleeping/"
+cp "$ROOT"/Sources/YunduoPet/Resources/IdleCardboardBoxExhausted/*.png "$RESOURCES/IdleCardboardBoxExhausted/"
 cp "$ROOT"/Sources/YunduoPet/Resources/IdleGrooming/*.png "$RESOURCES/IdleGrooming/"
 cp "$ROOT"/Sources/YunduoPet/Resources/IdleSleeping/*.png "$RESOURCES/IdleSleeping/"
 cp "$ROOT"/Sources/YunduoPet/Resources/IdleExhausted/*.png "$RESOURCES/IdleExhausted/"
@@ -60,6 +77,7 @@ cp "$ROOT"/Sources/YunduoPet/Resources/Working/*.png "$RESOURCES/Working/"
 cp "$ROOT"/Sources/YunduoPet/Resources/WorkingPhone/*.png "$RESOURCES/WorkingPhone/"
 cp "$ROOT"/Sources/YunduoPet/Resources/WorkingCoke/*.png "$RESOURCES/WorkingCoke/"
 cp "$ROOT"/Sources/YunduoPet/Resources/WaitingForApproval/*.png "$RESOURCES/WaitingForApproval/"
+cp "$ROOT"/Sources/YunduoPet/Resources/ShopItems/*.png "$RESOURCES/ShopItems/"
 
 codesign --force --deep --sign - "$APP" >/dev/null
 /usr/bin/touch "$APP"
