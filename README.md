@@ -12,11 +12,11 @@
 [English](#english) · [简体中文](#简体中文)
 
 <p align="center">
-  <img src="Sources/YunduoPet/Resources/IdleSoftCushionGrooming/00.png" width="150" alt="Suannai grooming on the soft cushion" />
+  <img src="Sources/YunduoPet/Resources/IdleSoftCushionGrooming/00.png" width="174" alt="Suannai grooming on the soft cushion" />
   &nbsp;&nbsp;
-  <img src="Sources/YunduoPet/Resources/Working/00.png" width="150" alt="Suannai working on a MacBook" />
+  <img src="Sources/YunduoPet/Resources/Working/00.png" width="128" alt="Suannai working on a MacBook" />
   &nbsp;&nbsp;
-  <img src="Sources/YunduoPet/Resources/IdleCardboardBoxSleeping/00.png" width="150" alt="Suannai sleeping in the cardboard box" />
+  <img src="Sources/YunduoPet/Resources/IdleCardboardBoxSleeping/00.png" width="200" alt="Suannai sleeping in the cardboard box" />
 </p>
 
 ## English
