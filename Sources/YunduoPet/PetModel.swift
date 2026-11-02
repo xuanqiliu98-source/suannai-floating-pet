@@ -43,6 +43,7 @@ final class PetModel: ObservableObject {
     @Published private(set) var showsEnergyBar = true
     @Published private(set) var fishBalance = 0
     @Published private(set) var ownedShopItemIDs = Set<String>()
+    @Published private(set) var equippedEnergySkinID: String?
     @Published private(set) var equippedBedID: String?
     @Published private(set) var fishRewardNotice: FishRewardNotice?
     @Published private(set) var shopMessage: String?
@@ -74,6 +75,7 @@ final class PetModel: ObservableObject {
     let workingCokeFrames: [NSImage]
     let waitingForApprovalFrames: [NSImage]
 
+    private let defaults: UserDefaults
     private var animationTimer: Timer?
     private var usageRefreshTimer: Timer?
     private var usageRetryTimer: Timer?
@@ -92,6 +94,7 @@ final class PetModel: ObservableObject {
     private enum EconomyDefaultsKey {
         static let fishBalance = "fishBalance"
         static let ownedShopItemIDs = "ownedShopItemIDs"
+        static let equippedEnergySkinID = "equippedEnergySkinID"
         static let equippedBedID = "equippedBedID"
         static let lastTouchRewardAt = "lastTouchFishRewardAt"
         static let touchRewardDay = "touchFishRewardDay"
@@ -117,7 +120,8 @@ final class PetModel: ObservableObject {
         }
     )
 
-    init() {
+    init(defaults: UserDefaults = .standard, startsServices: Bool = true) {
+        self.defaults = defaults
         idleFrames = Self.loadFrames(in: "Idle")
         idleSoftCushionFrames = Self.loadFrames(in: "IdleSoftCushion")
         idleSoftCushionGroomingFrames = Self.loadFrames(in: "IdleSoftCushionGrooming")
@@ -140,21 +144,28 @@ final class PetModel: ObservableObject {
         workingPhoneFrames = Self.loadFrames(in: "WorkingPhone")
         workingCokeFrames = Self.loadFrames(in: "WorkingCoke")
         waitingForApprovalFrames = Self.loadFrames(in: "WaitingForApproval")
-        if let savedScale = UserDefaults.standard.object(forKey: "petScale") as? NSNumber {
+        if let savedScale = defaults.object(forKey: "petScale") as? NSNumber {
             petScale = Self.clampedPetScale(CGFloat(savedScale.doubleValue))
         }
-        if UserDefaults.standard.object(forKey: "showsEnergyBar") != nil {
-            showsEnergyBar = UserDefaults.standard.bool(forKey: "showsEnergyBar")
+        if defaults.object(forKey: "showsEnergyBar") != nil {
+            showsEnergyBar = defaults.bool(forKey: "showsEnergyBar")
         }
-        fishBalance = max(0, UserDefaults.standard.integer(forKey: EconomyDefaultsKey.fishBalance))
+        fishBalance = max(0, defaults.integer(forKey: EconomyDefaultsKey.fishBalance))
         ownedShopItemIDs = Set(
-            UserDefaults.standard.stringArray(forKey: EconomyDefaultsKey.ownedShopItemIDs) ?? []
+            defaults.stringArray(forKey: EconomyDefaultsKey.ownedShopItemIDs) ?? []
         )
-        if let savedBedID = UserDefaults.standard.string(forKey: EconomyDefaultsKey.equippedBedID),
+        if let savedBedID = defaults.string(forKey: EconomyDefaultsKey.equippedBedID),
            ownedShopItemIDs.contains(savedBedID) {
             equippedBedID = savedBedID
         }
+        if let savedSkinID = defaults.string(forKey: EconomyDefaultsKey.equippedEnergySkinID),
+           ownedShopItemIDs.contains(savedSkinID),
+           EnergyBarSkin(rawValue: savedSkinID) != nil {
+            equippedEnergySkinID = savedSkinID
+        }
         visualState = enteringFrames.isEmpty ? .idle : .entering
+
+        guard startsServices else { return }
 
         let animationTimer = Timer(timeInterval: 0.16, repeats: true) { [weak self] _ in
             let isEventTracking = RunLoop.current.currentMode == .eventTracking
@@ -242,6 +253,18 @@ final class PetModel: ObservableObject {
         tryAwardTouchFish()
     }
 
+    var energyBarSkin: EnergyBarSkin? {
+        equippedEnergySkinID.flatMap(EnergyBarSkin.init(rawValue:))
+    }
+
+    func isShopItemEquipped(_ item: PetShopItem) -> Bool {
+        switch item.kind {
+        case .bed: return equippedBedID == item.id
+        case .energySkin: return equippedEnergySkinID == item.id
+        default: return false
+        }
+    }
+
     func ownsShopItem(_ item: PetShopItem) -> Bool {
         item.kind != .consumable && ownedShopItemIDs.contains(item.id)
     }
@@ -261,7 +284,7 @@ final class PetModel: ObservableObject {
         fishBalance -= item.price
         if item.kind != .consumable {
             ownedShopItemIDs.insert(item.id)
-            UserDefaults.standard.set(
+            defaults.set(
                 Array(ownedShopItemIDs).sorted(),
                 forKey: EconomyDefaultsKey.ownedShopItemIDs
             )
@@ -278,6 +301,9 @@ final class PetModel: ObservableObject {
         case .bed:
             equipBed(item)
             shopMessage = "「\(item.name)」已购买并使用"
+        case .energySkin:
+            equipEnergySkin(item)
+            shopMessage = "「\(item.name)」已兑换并换上"
         }
     }
 
@@ -296,9 +322,24 @@ final class PetModel: ObservableObject {
                 equipBed(item)
                 shopMessage = "已换上「\(item.name)」"
             }
+        case .energySkin:
+            if equippedEnergySkinID == item.id {
+                equippedEnergySkinID = nil
+                defaults.removeObject(forKey: EconomyDefaultsKey.equippedEnergySkinID)
+                shopMessage = "已恢复默认能量条，皮肤保留在仓库"
+            } else {
+                equipEnergySkin(item)
+                shopMessage = "已换上「\(item.name)」"
+            }
         case .consumable:
             break
         }
+    }
+
+    private func equipEnergySkin(_ item: PetShopItem) {
+        guard item.kind == .energySkin, EnergyBarSkin(rawValue: item.id) != nil else { return }
+        equippedEnergySkinID = item.id
+        defaults.set(item.id, forKey: EconomyDefaultsKey.equippedEnergySkinID)
     }
 
     func clearShopMessage() {
@@ -313,13 +354,13 @@ final class PetModel: ObservableObject {
         let clamped = Self.clampedPetScale(scale)
         guard abs(petScale - clamped) > 0.001 else { return }
         petScale = clamped
-        UserDefaults.standard.set(Double(clamped), forKey: "petScale")
+        defaults.set(Double(clamped), forKey: "petScale")
     }
 
     func setEnergyBarVisible(_ isVisible: Bool) {
         guard showsEnergyBar != isVisible else { return }
         showsEnergyBar = isVisible
-        UserDefaults.standard.set(isVisible, forKey: "showsEnergyBar")
+        defaults.set(isVisible, forKey: "showsEnergyBar")
     }
 
     func dismissCompletionNotice() {
@@ -639,7 +680,6 @@ final class PetModel: ObservableObject {
     }
 
     private func tryAwardTouchFish() {
-        let defaults = UserDefaults.standard
         let now = Date()
         let dayKey = Self.localDayKey(for: now)
         var rewardsToday = defaults.integer(forKey: EconomyDefaultsKey.touchRewardCount)
@@ -671,18 +711,18 @@ final class PetModel: ObservableObject {
         equippedBedID = item.id
         frameIndex = 0
         idleSleepingTickCount = 0
-        UserDefaults.standard.set(item.id, forKey: EconomyDefaultsKey.equippedBedID)
+        defaults.set(item.id, forKey: EconomyDefaultsKey.equippedBedID)
     }
 
     private func unequipBed() {
         equippedBedID = nil
         frameIndex = 0
         idleSleepingTickCount = 0
-        UserDefaults.standard.removeObject(forKey: EconomyDefaultsKey.equippedBedID)
+        defaults.removeObject(forKey: EconomyDefaultsKey.equippedBedID)
     }
 
     private func persistFishBalance() {
-        UserDefaults.standard.set(fishBalance, forKey: EconomyDefaultsKey.fishBalance)
+        defaults.set(fishBalance, forKey: EconomyDefaultsKey.fishBalance)
     }
 
     private static func localDayKey(for date: Date) -> String {

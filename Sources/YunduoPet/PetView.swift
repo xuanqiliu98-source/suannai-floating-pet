@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 
+private let statusCapsuleHeight: CGFloat = 19
+
 struct PetRootView: View {
     @ObservedObject var model: PetModel
     @State private var pressed = false
@@ -38,14 +40,36 @@ struct PetRootView: View {
 
     private var petContent: some View {
         VStack(spacing: 2) {
-            Group {
-                if model.showsEnergyBar {
-                    WeeklyEnergyBar(remaining: model.weeklyRemaining)
-                } else {
-                    Color.clear
+            HStack(spacing: 6) {
+                Group {
+                    if model.showsEnergyBar {
+                        WeeklyEnergyBar(remaining: model.weeklyRemaining, skin: model.energyBarSkin)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(height: statusCapsuleHeight)
+
+                Button {
+                    model.clearShopMessage()
+                    showsShop.toggle()
+                } label: {
+                    FishBalanceBadge(balance: model.fishBalance, skin: model.energyBarSkin)
+                }
+                .buttonStyle(.plain)
+                .help("酸奶的小店·小鱼干 \(model.fishBalance)")
+                .accessibilityLabel("小鱼干 \(model.fishBalance)条，打开酸奶的小店")
+                .fixedSize()
+            }
+            .frame(width: 155, height: 21)
+            .overlay(alignment: .topTrailing) {
+                if let notice = model.fishRewardNotice {
+                    FishRewardBubble(notice: notice)
+                        .offset(y: 25)
+                        .transition(.scale.combined(with: .opacity))
+                        .allowsHitTesting(false)
                 }
             }
-            .frame(width: 112, height: 19)
 
             ZStack {
                 if let bedID = model.equippedBedID,
@@ -122,18 +146,6 @@ struct PetRootView: View {
                         .offset(x: -33, y: -8 + bubble.verticalOffset)
                 }
 
-                VStack(spacing: 4) {
-                    FishBalanceButton(balance: model.fishBalance) {
-                        model.clearShopMessage()
-                        showsShop.toggle()
-                    }
-
-                    if let notice = model.fishRewardNotice {
-                        FishRewardBubble(notice: notice)
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .offset(x: 50, y: -35)
             }
             .frame(width: 115, height: 125)
             .help(model.bridgeMessage)
@@ -158,10 +170,7 @@ struct PetRootView: View {
             Divider()
             Button("退出酸奶") { NSApp.terminate(nil) }
         }
-        // Anchor the shop to the whole pet area instead of the fish button.
-        // The fish button sits over the cat's upper-right corner, so a popover
-        // expanding left from that button covered the pet. Using the pet bounds
-        // keeps the popover completely beside the pet.
+        // Anchor the shop to the whole pet area to keep it beside the pet.
         .popover(isPresented: $showsShop, arrowEdge: .trailing) {
             PetShopPopover(model: model)
         }
@@ -172,32 +181,26 @@ struct PetRootView: View {
     }
 }
 
-private struct FishBalanceButton: View {
+private struct FishBalanceBadge: View {
     let balance: Int
-    let action: () -> Void
+    let skin: EnergyBarSkin?
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 3) {
-                Text("🐟")
-                    .font(.system(size: 10))
-                Text("\(balance)")
-                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Color(red: 0.12, green: 0.21, blue: 0.28))
-            }
-            .padding(.horizontal, 7)
-            .frame(height: 21)
-            .background(
-                Capsule()
-                    .fill(Color(red: 1.0, green: 0.98, blue: 0.94).opacity(0.98))
-                    .overlay(Capsule().stroke(Color(red: 0.88, green: 0.80, blue: 0.69), lineWidth: 0.7))
-                    .shadow(color: .black.opacity(0.16), radius: 2, y: 1)
-            )
+        let palette = skin.map(EnergySkinPalette.init)
+        HStack(spacing: 3) {
+            Image(systemName: "fish.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(palette?.accent ?? Color.cyan)
+            Text("\(balance)")
+                .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(palette?.ink ?? Color.white)
         }
-        .buttonStyle(.plain)
-        .help("酸奶的小店·小鱼干 \(balance)")
-        .accessibilityLabel("小鱼干 \(balance)条，打开酸奶的小店")
+        .padding(.horizontal, 7)
+        .frame(height: statusCapsuleHeight)
+        .background(Capsule().fill(palette?.shell ?? Color(white: 0.13)))
+        .overlay(Capsule().stroke(palette?.border ?? Color.white.opacity(0.32), lineWidth: 0.7))
+        .fixedSize()
     }
 }
 
@@ -292,7 +295,7 @@ private struct PetShopPopover: View {
                             .foregroundStyle(.secondary)
                         Text("仓库还是空的")
                             .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        Text("购买玩具或猫窝后会放在这里")
+                        Text("购买玩具、猫窝或能量条皮肤后会放在这里")
                             .font(.system(size: 10.5, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
@@ -303,7 +306,7 @@ private struct PetShopPopover: View {
                             ForEach(ownedItems) { item in
                                 InventoryItemCard(
                                     item: item,
-                                    isEquipped: item.kind == .bed && model.equippedBedID == item.id
+                                    isEquipped: model.isShopItemEquipped(item)
                                 ) {
                                     model.useOwnedItem(item)
                                 }
@@ -370,6 +373,19 @@ private struct FishWallet: View {
     }
 }
 
+private struct ShopGridCardFrame: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(8)
+            .frame(maxWidth: .infinity)
+            .frame(height: 126)
+            .background(
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .fill(Color(red: 0.98, green: 0.97, blue: 0.94))
+            )
+    }
+}
+
 private struct ShopItemCard: View {
     let item: PetShopItem
     let isOwned: Bool
@@ -384,6 +400,12 @@ private struct ShopItemCard: View {
             Text(item.name)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .lineLimit(1)
+
+            Text("能量条＋小鱼干 · 永久皮肤")
+                .font(.system(size: 9, design: .rounded))
+                .foregroundStyle(.secondary)
+                .opacity(item.kind == .energySkin ? 1 : 0)
+                .accessibilityHidden(item.kind != .energySkin)
 
             Button(action: purchase) {
                 HStack(spacing: 5) {
@@ -406,9 +428,7 @@ private struct ShopItemCard: View {
             .disabled(isOwned)
             .opacity(isOwned ? 0.62 : 1)
         }
-        .padding(8)
-        .background(Color(red: 0.98, green: 0.97, blue: 0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .modifier(ShopGridCardFrame())
     }
 }
 
@@ -424,14 +444,12 @@ private struct InventoryItemCard: View {
                 .frame(height: 48)
             Text(item.name)
                 .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-            Button(isEquipped ? "收回" : (item.kind == .toy ? "玩一下" : "使用"), action: use)
+            Button(isEquipped ? (item.kind == .energySkin ? "恢复默认" : "收回") : (item.kind == .toy ? "玩一下" : "使用"), action: use)
                 .buttonStyle(.borderedProminent)
                 .tint(isEquipped ? Color(red: 0.43, green: 0.48, blue: 0.50) : Color(red: 0.05, green: 0.67, blue: 0.82))
                 .controlSize(.small)
         }
-        .padding(9)
-        .background(Color(red: 0.98, green: 0.97, blue: 0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .modifier(ShopGridCardFrame())
     }
 }
 
@@ -439,7 +457,15 @@ private struct ShopItemArtwork: View {
     let itemID: String
 
     var body: some View {
-        if let image = ShopItemAssets.image(for: itemID) {
+        if let skin = EnergyBarSkin(rawValue: itemID) {
+            HStack(spacing: 6) {
+                WeeklyEnergyBar(remaining: 0.63, skin: skin)
+                FishBalanceBadge(balance: 60, skin: skin)
+            }
+            .frame(maxWidth: 140)
+            .frame(height: statusCapsuleHeight)
+            .accessibilityHidden(true)
+        } else if let image = ShopItemAssets.image(for: itemID) {
             Image(nsImage: image)
                 .resizable()
                 .interpolation(.high)
@@ -651,7 +677,7 @@ private struct BubblePointer: Shape {
     }
 }
 
-private struct WeeklyEnergyBar: View {
+struct ClassicWeeklyEnergyBar: View {
     let remaining: Double?
 
     private var clamped: Double? {
@@ -665,15 +691,14 @@ private struct WeeklyEnergyBar: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let shellHeight: CGFloat = 17
-            let shellY = (proxy.size.height - shellHeight) / 2
+            let shellHeight = proxy.size.height
             let inset: CGFloat = 2
             let innerHeight = shellHeight - inset * 2
             let innerWidth = max(proxy.size.width - inset * 2, 0)
             let badgeSize: CGFloat = 15
             let badgeY = (proxy.size.height - badgeSize) / 2
 
-            ZStack(alignment: .leading) {
+            ZStack(alignment: .topLeading) {
                 // One continuous outer shell: icon, fill and value no longer
                 // depend on two shapes meeting at a separate seam.
                 Capsule()
@@ -687,7 +712,6 @@ private struct WeeklyEnergyBar: View {
                     .overlay(Capsule().stroke(Color.white.opacity(0.32), lineWidth: 0.7))
                     .shadow(color: .black.opacity(0.45), radius: 1.5, y: 1)
                     .frame(width: proxy.size.width, height: shellHeight)
-                    .offset(y: shellY)
 
                 if let clamped {
                     Capsule()
@@ -700,7 +724,7 @@ private struct WeeklyEnergyBar: View {
                         )
                         .frame(width: innerWidth * clamped, height: innerHeight)
                         .shadow(color: Color.cyan.opacity(0.8), radius: 2.5)
-                        .offset(x: inset, y: shellY + inset)
+                        .offset(x: inset, y: inset)
                 }
 
                 Text(valueText)
