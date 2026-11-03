@@ -42,7 +42,7 @@ Each task completion that Suannai detects earns **1 fish**. Petting her also has
 | Item | Price in fish | How it works |
 | --- | --- | --- |
 | Chicken / tuna can | 2 / 4 | Suannai eats the can as soon as you buy it. |
-| Yarn ball / laser pointer | 8 / 25 | Choose **玩一下** in the inventory to play again. |
+| Yarn ball / laser pointer | 8 / 25 | Choose **玩一下** to play two rounds. Suannai bats the yarn ball and hugs it, or chases the laser dot and peeks under her paw. |
 | Cardboard box / soft cushion | 12 / 25 | Each bed has its own idle, grooming, sleeping and exhausted animations. |
 | Cream Candy / Minimal Mint / Paw Energy | 60 each | Each skin styles both the energy bar and the fish counter. Shop cards preview the pair. |
 
@@ -98,7 +98,7 @@ The Swift source code and build scripts are available under the [MIT License](LI
 | 商品 | 价格（条） | 用法 |
 | --- | --- | --- |
 | 鸡肉罐头 / 金枪鱼罐头 | 2 / 4 | 买下后酸奶会立即吃掉。 |
-| 毛线球 / 激光笔 | 8 / 25 | 在仓库点「玩一下」，可以反复和酸奶玩。 |
+| 毛线球 / 激光笔 | 8 / 25 | 在仓库点「玩一下」连玩两轮：酸奶把毛线球拨开，再抱住蹭脸；追激光时会摆尾扑向红点，最后抬爪偷看。 |
 | 快递纸箱 / 柔软坐垫 | 12 / 25 | 每个窝都有专属的待机、梳毛、睡觉和疲惫动画。 |
 | 奶油软糖 / 极简薄荷 / 猫爪电量 | 每款 60 | 能量条和小鱼干计数一起换肤，商品卡上可以预览整套效果。 |
 
