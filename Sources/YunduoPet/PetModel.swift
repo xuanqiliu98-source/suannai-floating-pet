@@ -16,6 +16,8 @@ enum PetVisualState: String {
     case entering
     case clickTail
     case clickMeal
+    case playYarn
+    case playLaser
     case clickTurn
     case draggingLeft
     case draggingRight
@@ -65,6 +67,8 @@ final class PetModel: ObservableObject {
     let idleSleepingFrames: [NSImage]
     let idleExhaustedFrames: [NSImage]
     let clickTailFrames: [NSImage]
+    private let yarnPlayFrames: [NSImage]
+    private let laserPlayFrames: [NSImage]
     let clickMealFrames: [NSImage]
     let clickTurnFrames: [NSImage]
     let enteringFrames: [NSImage]
@@ -134,6 +138,8 @@ final class PetModel: ObservableObject {
         idleGroomingFrames = Self.loadFrames(in: "IdleGrooming")
         idleSleepingFrames = Self.loadFrames(in: "IdleSleeping")
         idleExhaustedFrames = Self.loadFrames(in: "IdleExhausted")
+        yarnPlayFrames = Self.loadFrames(in: "ToyYarn")
+        laserPlayFrames = Self.loadFrames(in: "ToyLaser")
         clickTailFrames = Self.loadFrames(in: "ClickTail")
         clickMealFrames = Self.loadFrames(in: "ClickMeal")
         clickTurnFrames = Self.loadFrames(in: "ClickTurn")
@@ -200,6 +206,10 @@ final class PetModel: ObservableObject {
         let frames = framesForCurrentState
         guard !frames.isEmpty else { return idleFrames.first }
         return frames[min(frameIndex, frames.count - 1)]
+    }
+
+    var isPlayingWithToy: Bool {
+        visualState == .playYarn || visualState == .playLaser
     }
 
     var usesIntegratedBedAnimation: Bool {
@@ -297,7 +307,7 @@ final class PetModel: ObservableObject {
             playShopReaction(.clickMeal)
         case .toy:
             shopMessage = "「\(item.name)」已放进仓库"
-            playShopReaction(item.id == "yarn-ball" ? .clickTail : .clickTurn)
+            if !isCodexWorking && !isWaitingForApproval { playToy(item) }
         case .bed:
             equipBed(item)
             shopMessage = "「\(item.name)」已购买并使用"
@@ -312,8 +322,12 @@ final class PetModel: ObservableObject {
         shopMessage = nil
         switch item.kind {
         case .toy:
+            if isWaitingForApproval {
+                shopMessage = "酸奶在等授权，等会儿再玩吧"
+                return
+            }
+            playToy(item)
             shopMessage = "酸奶正在玩「\(item.name)」"
-            playShopReaction(item.id == "yarn-ball" ? .clickTail : .clickTurn)
         case .bed:
             if equippedBedID == item.id {
                 unequipBed()
@@ -449,6 +463,8 @@ final class PetModel: ObservableObject {
             // images here made the motion look stalled even though the timer
             // was running normally.
             return idleGroomingFrames
+        case .playYarn: return yarnPlayFrames
+        case .playLaser: return laserPlayFrames
         case .clickTail:
             guard clickTailFrames.count == 6 else { return clickTailFrames }
             // A second wag and a short settling beat make the reaction readable.
@@ -698,6 +714,15 @@ final class PetModel: ObservableObject {
         defaults.set(now.timeIntervalSince1970, forKey: EconomyDefaultsKey.lastTouchRewardAt)
         defaults.set(rewardsToday + 1, forKey: EconomyDefaultsKey.touchRewardCount)
         awardFish(amount, reason: "摸摸酸奶")
+    }
+
+    private func playToy(_ item: PetShopItem) {
+        switch item.id {
+        case "yarn-ball": visualState = .playYarn
+        case "laser-pointer": visualState = .playLaser
+        default: return
+        }
+        frameIndex = 0
     }
 
     private func playShopReaction(_ state: PetVisualState) {

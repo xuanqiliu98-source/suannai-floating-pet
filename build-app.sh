@@ -39,6 +39,8 @@ mkdir -p \
   "$RESOURCES/WorkingPhone" \
   "$RESOURCES/WorkingCoke" \
   "$RESOURCES/WaitingForApproval" \
+  "$RESOURCES/ToyYarn" \
+  "$RESOURCES/ToyLaser" \
   "$RESOURCES/ShopItems" \
   "$MODULE_CACHE"
 
@@ -77,6 +79,8 @@ cp "$ROOT"/Sources/YunduoPet/Resources/Working/*.png "$RESOURCES/Working/"
 cp "$ROOT"/Sources/YunduoPet/Resources/WorkingPhone/*.png "$RESOURCES/WorkingPhone/"
 cp "$ROOT"/Sources/YunduoPet/Resources/WorkingCoke/*.png "$RESOURCES/WorkingCoke/"
 cp "$ROOT"/Sources/YunduoPet/Resources/WaitingForApproval/*.png "$RESOURCES/WaitingForApproval/"
+cp "$ROOT"/Sources/YunduoPet/Resources/ToyYarn/*.png "$RESOURCES/ToyYarn/"
+cp "$ROOT"/Sources/YunduoPet/Resources/ToyLaser/*.png "$RESOURCES/ToyLaser/"
 cp "$ROOT"/Sources/YunduoPet/Resources/ShopItems/*.png "$RESOURCES/ShopItems/"
 
 codesign --force --deep --sign - "$APP" >/dev/null

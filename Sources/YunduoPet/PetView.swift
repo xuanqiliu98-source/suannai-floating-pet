@@ -92,7 +92,7 @@ struct PetRootView: View {
                     }
                 }
                 .frame(
-                    width: model.usesIntegratedBedAnimation ? 150 : 115,
+                    width: (model.usesIntegratedBedAnimation || model.isPlayingWithToy) ? 150 : 115,
                     height: 125
                 )
                 .scaleEffect(pressed ? 0.97 : 1)
